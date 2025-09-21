@@ -1,30 +1,35 @@
-import { MongoClient, ServerApiVersion } from "mongodb";
+// src/common/db.js
+import 'dotenv/config';
+import { MongoClient, ServerApiVersion } from 'mongodb';
 
-export const DB_NAME = "cine-db";
+export const DB_NAME = process.env.DB_NAME || 'cine-db';
+const DB_URI = process.env.MONGODB_URI; // <- viene de Render/ .env local
 
-const DB_URI =
-  "mongodb+srv://eva3_express:MjwWz9cYHpGAKTwY@cluster-express.gc2p6lf.mongodb.net/?retryWrites=true&w=majority&appName=cluster-express";
+if (!DB_URI) {
+  throw new Error('[MongoDB] Falta la variable MONGODB_URI');
+}
 
 let client;
 let db;
 
 export async function connectToMongo() {
-  if (db) return db; 
+  if (db) return db;
+
   client = new MongoClient(DB_URI, {
     serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
-    serverSelectionTimeoutMS: 7000,
+    serverSelectionTimeoutMS: 10000,
   });
 
-  console.log("[MongoDB] Intentando conectar a Atlas…");
+  console.log('[MongoDB] Conectando a Atlas…');
   await client.connect();
-  await client.db(DB_NAME).command({ ping: 1 }); 
   db = client.db(DB_NAME);
-  console.log(`[MongoDB] Conectado a Atlas | DB: ${DB_NAME}`);
+  await db.command({ ping: 1 });
+  console.log(`[MongoDB] Conectado | DB: ${DB_NAME}`);
   return db;
 }
 
 export function getDb() {
-  if (!db) throw new Error("DB no inicializada. Llamá connectToMongo() primero.");
+  if (!db) throw new Error('DB no inicializada. Ejecutá connectToMongo() primero.');
   return db;
 }
 
@@ -32,7 +37,10 @@ export function getCollection(name) {
   return getDb().collection(name);
 }
 
-// Cierre limpio (opcional)
-process.on("SIGINT", async () => {
-  try { if (client) await client.close(); } finally { process.exit(0); }
-});
+export async function closeMongo() {
+  try { if (client) await client.close(); }
+  finally { client = undefined; db = undefined; }
+}
+
+process.on('SIGINT', () => closeMongo().finally(() => process.exit(0)));
+process.on('SIGTERM', () => closeMongo().finally(() => process.exit(0)));
